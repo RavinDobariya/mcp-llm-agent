@@ -1,0 +1,13 @@
+tool_definitions = [
+    {
+        "name": "web_search",
+        "description": "Search the web for latest information",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"}
+            },
+            "required": ["query"]
+        }
+    }
+]
