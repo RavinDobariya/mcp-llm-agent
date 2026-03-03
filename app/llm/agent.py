@@ -1,43 +1,60 @@
-from app.llm.claude_client import ask_claude
-from app.llm.build_prompt import build_prompt
-from app.tools.registry import TOOL_MAP
+import os
+from anthropic import AsyncAnthropic
+
+"""
+we passing MCPserrvice object to Agent class to access MCPserrvice methods via mcp.method()
+
+response.content = [
+    TextBlock(...),     #text
+    ToolUseBlock(...),
+    ...
+]
+
+it contains all the messages from Claude
+"""
 
 class Agent:
-    def __init__(self, mcp_service):
-        self.mcp = mcp_service
+    def __init__(self, mcp):
+        self.mcp = mcp
+        self.client = AsyncAnthropic(
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+        )
 
-    async def run(self, query: str) -> str:
-        return await self.mcp.ask(query)
+    async def run(self, user_input: str) -> str:
 
-""""    
-def run_agent(query: str) -> str:
-    messages = [
-        {"role": "user", "content": build_prompt(query)}
-    ]
+        response = await self.client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=500,
+            messages=[
+                {"role": "user", "content": user_input}
+            ],
+            tools=self.mcp.get_tools_schema()           # give access to tools
+        )
 
-    response = ask_claude(messages)
+        # If Claude wants to use tool
+        for block in response.content:              # or response.content[0].type == "tool_use"
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input
 
-    content = response.content[0]
+            tool_result = await self.mcp.call_tool(tool_name, tool_input)
 
-    # 🧠 If Claude calls a tool
-    if content.type == "tool_use":
-        tool_name = content.name
-        tool_input = content.input
+            # Send tool result back to Claude for final answer
+            followup = await self.client.messages.create(
+                model="claude-3-5-sonnet-20241022",
+                max_tokens=500,
+                messages=[
+                    {"role": "user", "content": user_input},
+                    response.content[0],
+                    {
+                        "role": "tool",
+                        #"tool_use_id": tool_call.id,
+                        "content": str(tool_result)
+                    }
+                ]
+            )
 
-        tool_result = TOOLS[tool_name](**tool_input)
+            return followup.content[0].text
 
-        return f"[TOOL USED: {tool_name}]\n{tool_result}"
-
-    # 💬 Normal text response
-    return content.text
-
-"""
-"""
-{
-  "type": "tool_use",
-  "name": "web_search",
-  "input": {
-    "query": "latest AI news"
-  }
-tool_result = web_search(query="latest AI news")
-"""
+        # if Claude did not use tool
+        return response.content[0].text

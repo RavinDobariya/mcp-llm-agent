@@ -2,7 +2,6 @@ import asyncio
 from app.mcp.mcp_service import MCPService
 from app.llm.agent import Agent
 
-
 async def main():
     mcp = MCPService()
     await mcp.connect()
@@ -18,7 +17,6 @@ async def main():
             break
 
         result = await agent.run(user_input)
-
         print("\n🤖", result, "\n")
 
     await mcp.close()
